@@ -46,6 +46,7 @@ const LANG_NAMES: Record<string, string> = {
   'ja-JP': '🇯🇵 日本語',
   'ko-KR': '🇰🇷 한국어',
 };
+
 function App() {
   const [text, setText] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('uk_UA-lada-medium');
@@ -61,7 +62,6 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  // Load TTS module
   useEffect(() => {
     const loadModule = async () => {
       try {
@@ -95,12 +95,10 @@ function App() {
     setDownloadProgress('Підготовка...');
 
     try {
-      // Check if model is already stored
       setDownloadProgress('Перевірка кешу...');
       const storedModels = await ttsModule.stored();
       console.log('Stored models:', storedModels);
 
-      // Download model if not cached
       if (!storedModels.includes(selectedVoice)) {
         setDownloadProgress('Завантаження голосової моделі...');
         console.log('Downloading model:', selectedVoice);
@@ -121,7 +119,6 @@ function App() {
       setDownloadProgress('Генерація мовлення...');
       console.log('Generating audio for text:', text.substring(0, 50));
 
-      // Generate audio
       const wav = await ttsModule.predict({
         text: text,
         voiceId: selectedVoice,
@@ -137,7 +134,6 @@ function App() {
       setAudioUrl(url);
       setDownloadProgress(null);
 
-      // Get duration
       const audio = new Audio(url);
       audio.onloadedmetadata = () => {
         setAudioDuration(audio.duration);
@@ -146,7 +142,6 @@ function App() {
       console.error('TTS Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Невідома помилка';
 
-      // Provide helpful error messages
       if (errorMessage.includes('Entry not found')) {
         setError('Голосова модель не знайдена. Спробуйте інший голос або очистіть кеш браузера.');
       } else if (errorMessage.includes('Failed to fetch')) {
@@ -200,7 +195,6 @@ function App() {
     document.body.removeChild(a);
   };
 
-  // Update current time
   useEffect(() => {
     const update = () => {
       if (audioRef.current && isPlaying) {
@@ -218,7 +212,6 @@ function App() {
     };
   }, [isPlaying]);
 
-  // Cleanup audio URL
   useEffect(() => {
     return () => {
       if (audioUrl) {
@@ -235,7 +228,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
       <header className="border-b border-white/10 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -260,12 +252,9 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Panel - Voice Selection */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Language Selection */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
               <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +273,6 @@ function App() {
               </select>
             </div>
 
-            {/* Voice Selection */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
               <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,7 +307,6 @@ function App() {
               </div>
             </div>
 
-            {/* Info Card */}
             <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm rounded-2xl border border-purple-500/20 p-6">
               <h3 className="text-sm font-semibold text-purple-300 mb-2">💡 Як це працює?</h3>
               <ul className="text-xs text-slate-400 space-y-1.5">
@@ -331,7 +318,6 @@ function App() {
               </ul>
             </div>
 
-            {/* Clear Cache Button */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
               <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
                 <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -361,8 +347,48 @@ function App() {
             </div>
           </div>
 
-          {/* Right Panel - Text Input & Audio */}
-            {/* Generate Button */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Текст для озвучення
+                </h2>
+                <span className="text-xs text-slate-400">{text.length} символів</span>
+              </div>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Введіть текст, який потрібно озвучити..."
+                rows={6}
+                className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all resize-none"
+              />
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="text-xs text-slate-400">Приклади:</span>
+                <button
+                  onClick={() => setText('Hello! Welcome to Piper text to speech.')}
+                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  English
+                </button>
+                <button
+                  onClick={() => setText('Привіт! Ласкаво просимо до синтезу мовлення Piper.')}
+                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Українська
+                </button>
+                <button
+                  onClick={() => setText('Привет! Добро пожаловать в синтез речи Piper.')}
+                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Русский
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={handleGenerate}
               disabled={!text.trim() || isGenerating || !ttsModule}
@@ -391,7 +417,6 @@ function App() {
               )}
             </button>
 
-            {/* Progress Bar */}
             {downloadProgress && (
               <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-4">
                 <div className="flex items-center gap-3">
@@ -405,7 +430,6 @@ function App() {
               </div>
             )}
 
-            {/* Error */}
             {error && (
               <div className="bg-red-500/10 backdrop-blur-sm rounded-2xl border border-red-500/20 p-4 flex items-start gap-3">
                 <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -413,12 +437,11 @@ function App() {
                 </svg>
                 <div>
                   <p className="text-red-400 text-sm">{error}</p>
-                  <p className="text-red-400/60 text-xs mt-1">Спробуйте інший голос або перевірте підключення до інтернету для завантаження моделі.</p>
+                  <p className="text-red-400/60 text-xs mt-1">Спробуйте інший голос або перевірте підключення до інтернету.</p>
                 </div>
               </div>
             )}
 
-            {/* Audio Player */}
             {audioUrl && (
               <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -428,15 +451,14 @@ function App() {
                   Результат
                 </h3>
 
-                {/* Waveform Visualization */}
                 <div className="bg-slate-800/50 rounded-xl p-4 mb-4">
                   <div className="flex items-center justify-center h-16 gap-0.5">
                     {Array.from({ length: 50 }).map((_, i) => (
                       <div
                         key={i}
                         className={`w-1 rounded-full transition-all ${
-                          isPlaying 
-                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse' 
+                          isPlaying
+                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse'
                             : 'bg-slate-600'
                         }`}
                         style={{
@@ -449,7 +471,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Controls */}
                 <div className="flex items-center gap-4">
                   <button
                     onClick={handlePlay}
@@ -475,7 +496,6 @@ function App() {
                     </svg>
                   </button>
 
-                  {/* Seek Bar */}
                   <div className="flex-1 flex items-center gap-3">
                     <span className="text-xs text-slate-400 w-10">{formatTime(currentTime)}</span>
                     <input
@@ -489,7 +509,6 @@ function App() {
                     <span className="text-xs text-slate-400 w-10">{formatTime(audioDuration || 0)}</span>
                   </div>
 
-                  {/* Download */}
                   <button
                     onClick={handleDownload}
                     className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-slate-300 hover:bg-slate-600 transition-colors"
@@ -511,7 +530,6 @@ function App() {
               </div>
             )}
 
-            {/* Features */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-5 text-center">
                 <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -545,7 +563,6 @@ function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-white/10 mt-12">
         <div className="max-w-6xl mx-auto px-4 py-6 text-center">
           <p className="text-sm text-slate-400">
