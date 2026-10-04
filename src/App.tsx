@@ -46,11 +46,10 @@ const LANG_NAMES: Record<string, string> = {
   'ja-JP': '🇯🇵 日本語',
   'ko-KR': '🇰🇷 한국어',
 };
-
 function App() {
   const [text, setText] = useState('');
-  const [selectedVoice, setSelectedVoice] = useState(PIPER_VOICES[0].id);
-  const [selectedLang, setSelectedLang] = useState('en-US');
+  const [selectedVoice, setSelectedVoice] = useState('uk_UA-lada-medium');
+  const [selectedLang, setSelectedLang] = useState('uk-UA');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
@@ -93,20 +92,34 @@ function App() {
     setIsGenerating(true);
     setError(null);
     setAudioUrl(null);
-    setDownloadProgress('Завантаження моделі...');
+    setDownloadProgress('Підготовка...');
 
     try {
-      // Download model with progress
-      setDownloadProgress('Завантаження голосової моделі...');
-      
-      await ttsModule.download(selectedVoice, (progress: any) => {
-        if (progress.loaded && progress.total) {
-          const percent = Math.round((progress.loaded * 100) / progress.total);
-          setDownloadProgress(`Завантаження: ${percent}%`);
-        }
-      });
+      // Check if model is already stored
+      setDownloadProgress('Перевірка кешу...');
+      const storedModels = await ttsModule.stored();
+      console.log('Stored models:', storedModels);
+
+      // Download model if not cached
+      if (!storedModels.includes(selectedVoice)) {
+        setDownloadProgress('Завантаження голосової моделі...');
+        console.log('Downloading model:', selectedVoice);
+
+        await ttsModule.download(selectedVoice, (progress: any) => {
+          if (progress.loaded && progress.total) {
+            const percent = Math.round((progress.loaded * 100) / progress.total);
+            setDownloadProgress(`Завантаження: ${percent}%`);
+          }
+        });
+
+        console.log('Model downloaded successfully');
+      } else {
+        console.log('Model already cached:', selectedVoice);
+        setDownloadProgress('Модель знайдена в кеші');
+      }
 
       setDownloadProgress('Генерація мовлення...');
+      console.log('Generating audio for text:', text.substring(0, 50));
 
       // Generate audio
       const wav = await ttsModule.predict({
@@ -119,6 +132,7 @@ function App() {
         }
       });
 
+      console.log('Audio generated successfully');
       const url = URL.createObjectURL(wav);
       setAudioUrl(url);
       setDownloadProgress(null);
@@ -130,7 +144,17 @@ function App() {
       };
     } catch (err) {
       console.error('TTS Error:', err);
-      setError(`Помилка генерації: ${err instanceof Error ? err.message : 'Невідома помилка'}`);
+      const errorMessage = err instanceof Error ? err.message : 'Невідома помилка';
+
+      // Provide helpful error messages
+      if (errorMessage.includes('Entry not found')) {
+        setError('Голосова модель не знайдена. Спробуйте інший голос або очистіть кеш браузера.');
+      } else if (errorMessage.includes('Failed to fetch')) {
+        setError('Не вдалося завантажити модель. Перевірте підключення до інтернету.');
+      } else {
+        setError(`Помилка генерації: ${errorMessage}`);
+      }
+
       setDownloadProgress(null);
     } finally {
       setIsGenerating(false);
@@ -139,7 +163,7 @@ function App() {
 
   const handlePlay = () => {
     if (!audioRef.current || !audioUrl) return;
-    
+
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -282,8 +306,8 @@ function App() {
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{voice.name}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        voice.gender === 'female' 
-                          ? 'bg-pink-500/20 text-pink-400' 
+                        voice.gender === 'female'
+                          ? 'bg-pink-500/20 text-pink-400'
                           : 'bg-blue-500/20 text-blue-400'
                       }`}>
                         {voice.gender === 'female' ? '♀' : '♂'}
@@ -306,65 +330,38 @@ function App() {
                 <li>• Генерація через WebAssembly + ONNX</li>
               </ul>
             </div>
+
+            {/* Clear Cache Button */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+              <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Управління кешем
+              </h3>
+              <button
+                onClick={async () => {
+                  if (!ttsModule) return;
+                  try {
+                    await ttsModule.flush();
+                    alert('Кеш моделей очищено!');
+                  } catch (err) {
+                    console.error('Failed to clear cache:', err);
+                    alert('Помилка очищення кешу');
+                  }
+                }}
+                disabled={!ttsModule}
+                className="w-full px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-400 text-sm rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Очистити кеш моделей
+              </button>
+              <p className="text-xs text-slate-500 mt-2">
+                Використовуйте, якщо виникають помилки завантаження
+              </p>
+            </div>
           </div>
 
           {/* Right Panel - Text Input & Audio */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Text Input */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Текст для озвучення
-                </h2>
-                <span className="text-xs text-slate-400">{text.length} символів</span>
-              </div>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Введіть текст, який потрібно озвучити..."
-                rows={6}
-                className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all resize-none"
-              />
-              
-              {/* Quick Examples */}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="text-xs text-slate-400">Приклади:</span>
-                <button
-                  onClick={() => setText('Hello! Welcome to Piper text to speech. This is a demonstration of browser-based speech synthesis.')}
-                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  English
-                </button>
-                <button
-                  onClick={() => setText('Привіт! Ласкаво просимо до синтезу мовлення Piper. Це демонстрація генерації мовлення у браузері.')}
-                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  Українська
-                </button>
-                <button
-                  onClick={() => setText('Привет! Добро пожаловать в синтез речи Piper. Это демонстрация генерации речи в браузере.')}
-                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  Русский
-                </button>
-                <button
-                  onClick={() => setText('Hallo! Willkommen bei der Piper Text-to-Speech. Dies ist eine Demonstration der sprachsynthese im Browser.')}
-                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  Deutsch
-                </button>
-                <button
-                  onClick={() => setText('Bonjour! Bienvenue dans la synthèse vocale Piper. Ceci est une démonstration de la synthèse vocale dans le navigateur.')}
-                  className="text-xs px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  Français
-                </button>
-              </div>
-            </div>
-
             {/* Generate Button */}
             <button
               onClick={handleGenerate}
