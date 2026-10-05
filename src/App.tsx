@@ -21,14 +21,13 @@ const PIPER_VOICES: Voice[] = [
   { id: 'es_ES-sharvard-medium', name: 'Sharvard', lang: 'es-ES', gender: 'male' },
   { id: 'it_IT-riccardo-x_low', name: 'Riccardo', lang: 'it-IT', gender: 'male' },
   { id: 'pt_BR-edresson-low', name: 'Edresson', lang: 'pt-BR', gender: 'male' },
-  { id: 'pl_PL-mcierek-medium', name: 'MCIerek', lang: 'pl-PL', gender: 'male' },
-  { id: 'uk_UA-lada-medium', name: 'Lada', lang: 'uk-UA', gender: 'female' },
-  { id: 'uk_UA-ukrainian_tts-medium', name: 'Ukrainian TTS', lang: 'uk-UA', gender: 'female' },
+  { id: 'pl_PL-gosia-medium', name: 'Gosia', lang: 'pl-PL', gender: 'female' },
+  { id: 'pl_PL-darkman-medium', name: 'Darkman', lang: 'pl-PL', gender: 'male' },
+  { id: 'uk_UA-lada-x_low', name: 'Lada', lang: 'uk-UA', gender: 'female' },
+  { id: 'uk_UA-ukrainian_tts-medium', name: 'Ukrainian TTS (3 голоси)', lang: 'uk-UA', gender: 'female' },
   { id: 'ru_RU-denis-medium', name: 'Denis', lang: 'ru-RU', gender: 'male' },
   { id: 'ru_RU-irina-medium', name: 'Irina', lang: 'ru-RU', gender: 'female' },
   { id: 'zh_CN-huayan-medium', name: '华燕 (Huayan)', lang: 'zh-CN', gender: 'female' },
-  { id: 'ja_JP-amy-medium', name: 'Amy', lang: 'ja-JP', gender: 'female' },
-  { id: 'ko_KR-amy-medium', name: 'Amy', lang: 'ko-KR', gender: 'female' },
 ];
 
 const LANG_NAMES: Record<string, string> = {
@@ -43,13 +42,11 @@ const LANG_NAMES: Record<string, string> = {
   'uk-UA': '🇺🇦 Українська',
   'ru-RU': '🇷🇺 Русский',
   'zh-CN': '🇨🇳 中文',
-  'ja-JP': '🇯🇵 日本語',
-  'ko-KR': '🇰🇷 한국어',
 };
 
 function App() {
   const [text, setText] = useState('');
-  const [selectedVoice, setSelectedVoice] = useState('uk_UA-lada-medium');
+  const [selectedVoice, setSelectedVoice] = useState('uk_UA-lada-x_low');
   const [selectedLang, setSelectedLang] = useState('uk-UA');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -102,14 +99,14 @@ function App() {
       if (!storedModels.includes(selectedVoice)) {
         setDownloadProgress('Завантаження голосової моделі...');
         console.log('Downloading model:', selectedVoice);
-
+        
         await ttsModule.download(selectedVoice, (progress: any) => {
           if (progress.loaded && progress.total) {
             const percent = Math.round((progress.loaded * 100) / progress.total);
             setDownloadProgress(`Завантаження: ${percent}%`);
           }
         });
-
+        
         console.log('Model downloaded successfully');
       } else {
         console.log('Model already cached:', selectedVoice);
@@ -141,7 +138,7 @@ function App() {
     } catch (err) {
       console.error('TTS Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Невідома помилка';
-
+      
       if (errorMessage.includes('Entry not found')) {
         setError('Голосова модель не знайдена. Спробуйте інший голос або очистіть кеш браузера.');
       } else if (errorMessage.includes('Failed to fetch')) {
@@ -149,7 +146,7 @@ function App() {
       } else {
         setError(`Помилка генерації: ${errorMessage}`);
       }
-
+      
       setDownloadProgress(null);
     } finally {
       setIsGenerating(false);
@@ -158,7 +155,7 @@ function App() {
 
   const handlePlay = () => {
     if (!audioRef.current || !audioUrl) return;
-
+    
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -294,8 +291,8 @@ function App() {
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{voice.name}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        voice.gender === 'female'
-                          ? 'bg-pink-500/20 text-pink-400'
+                        voice.gender === 'female' 
+                          ? 'bg-pink-500/20 text-pink-400' 
                           : 'bg-blue-500/20 text-blue-400'
                       }`}>
                         {voice.gender === 'female' ? '♀' : '♂'}
@@ -313,7 +310,7 @@ function App() {
                 <li>• Piper TTS працює повністю в браузері</li>
                 <li>• Моделі завантажуються один раз і кешуються</li>
                 <li>• Ваш текст ніколи не відправляється на сервер</li>
-                <li>• Підтримує 13+ мов та 20+ голосів</li>
+                <li>• Підтримує 11 мов та 20+ голосів</li>
                 <li>• Генерація через WebAssembly + ONNX</li>
               </ul>
             </div>
@@ -365,7 +362,7 @@ function App() {
                 rows={6}
                 className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all resize-none"
               />
-
+              
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="text-xs text-slate-400">Приклади:</span>
                 <button
@@ -457,8 +454,8 @@ function App() {
                       <div
                         key={i}
                         className={`w-1 rounded-full transition-all ${
-                          isPlaying
-                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse'
+                          isPlaying 
+                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse' 
                             : 'bg-slate-600'
                         }`}
                         style={{
@@ -556,7 +553,7 @@ function App() {
                   </svg>
                 </div>
                 <h3 className="text-white font-medium text-sm">Багатомовність</h3>
-                <p className="text-xs text-slate-400 mt-1">13+ мов та 20+ голосів</p>
+                <p className="text-xs text-slate-400 mt-1">11 мов та 20+ голосів</p>
               </div>
             </div>
           </div>
