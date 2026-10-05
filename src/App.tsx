@@ -62,7 +62,7 @@ function App() {
   useEffect(() => {
     const loadModule = async () => {
       try {
-        const tts = await import('@mintplex-labs/piper-tts-web');
+        const tts = await import('@realtimex/piper-tts-web');
         setTtsModule(tts);
       } catch (err) {
         console.error('Failed to load TTS module:', err);
@@ -89,81 +89,23 @@ function App() {
     setIsGenerating(true);
     setError(null);
     setAudioUrl(null);
-    setDownloadProgress('Підготовка...');
+    setDownloadProgress('Створення сесії...');
 
     try {
-      // Крок 1: Видаляємо стару модель з OPFS (вирішує проблему permissions)
-      setDownloadProgress('Очищення старого кешу...');
-      try {
-        await ttsModule.remove(selectedVoice);
-        console.log('Old model removed');
-      } catch (e) {
-        console.log('No old model to remove');
-      }
+      console.log('Creating TTS session with voice:', selectedVoice);
 
-      // Крок 2: Завантажуємо модель заново
-      setDownloadProgress('Завантаження голосової моделі...');
-      console.log('Downloading model:', selectedVoice);
+      // Створюємо сесію з вибраним голосом
+      const { TtsSession } = ttsModule;
+      const session = await TtsSession.create({ voiceId: selectedVoice as any });
 
-      await ttsModule.download(selectedVoice, (progress: any) => {
-        if (progress.loaded && progress.total) {
-          const percent = Math.round((progress.loaded * 100) / progress.total);
-          setDownloadProgress(`Завантаження: ${percent}%`);
-        }
-      });
-
-      console.log('Model downloaded successfully');
-
-      // Крок 3: Затримка перед генерацією (даємо час OPFS стабілізуватися)
-      setDownloadProgress('Підготовка до генерації...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Крок 4: Генерація аудіо з retry
+      console.log('Session created, generating audio...');
       setDownloadProgress('Генерація мовлення...');
-      console.log('Generating audio for text:', text.substring(0, 50));
 
-      let wav: Blob | undefined;
-      let attempts = 0;
-      const maxAttempts = 3;
+      // Генеруємо аудіо
+      const audioBlob = await session.predict(text);
 
-      while (attempts < maxAttempts) {
-        try {
-          wav = await ttsModule.predict({
-            text: text,
-            voiceId: selectedVoice,
-          }, (progress: any) => {
-            if (progress.loaded && progress.total) {
-              const percent = Math.round((progress.loaded * 100) / progress.total);
-              setDownloadProgress(`Генерація: ${percent}%`);
-            }
-          });
-          break; // Успіх - виходимо з циклу
-        } catch (predictErr) {
-          attempts++;
-          console.warn(`Attempt ${attempts} failed:`, predictErr);
-
-          if (attempts >= maxAttempts) {
-            throw predictErr;
-          }
-
-          // Перед повторною спробою - видаляємо і перезавантажуємо модель
-          setDownloadProgress(`Спроба ${attempts + 1}/${maxAttempts}... Перезавантаження моделі...`);
-          await ttsModule.remove(selectedVoice).catch(() => {});
-          await ttsModule.download(selectedVoice, (progress: any) => {
-            if (progress.loaded && progress.total) {
-              const percent = Math.round((progress.loaded * 100) / progress.total);
-              setDownloadProgress(`Завантаження: ${percent}%`);
-            }
-          });
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      if (!wav) {
-        throw new Error('Не вдалося згенерувати аудіо після всіх спроб');
-      }
       console.log('Audio generated successfully');
-      const url = URL.createObjectURL(wav);
+      const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
       setDownloadProgress(null);
 
@@ -180,7 +122,7 @@ function App() {
       } else if (errorMessage.includes('Failed to fetch')) {
         setError('Не вдалося завантажити модель. Перевірте підключення до інтернету.');
       } else if (errorMessage.includes('could not be read') || errorMessage.includes('permission')) {
-        setError('Проблема з доступом до файлу. Натисніть "Очистити кеш моделей" і спробуйте знову.');
+        setError('Проблема з доступом до файлу. Очистіть кеш браузера (Ctrl+Shift+Delete) і спробуйте знову.');
       } else {
         setError(`Помилка генерації: ${errorMessage}`);
       }
@@ -355,29 +297,16 @@ function App() {
 
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
               <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Управління кешем
+                Порада
               </h3>
-              <button
-                onClick={async () => {
-                  if (!ttsModule) return;
-                  try {
-                    await ttsModule.flush();
-                    alert('Кеш моделей очищено!');
-                  } catch (err) {
-                    console.error('Failed to clear cache:', err);
-                    alert('Помилка очищення кешу');
-                  }
-                }}
-                disabled={!ttsModule}
-                className="w-full px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-400 text-sm rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Очистити кеш моделей
-              </button>
+              <p className="text-xs text-slate-400">
+                Перше завантаження голосової моделі може зайняти 10-60 секунд. Модель кешується в браузері і наступного разу завантажиться миттєво.
+              </p>
               <p className="text-xs text-slate-500 mt-2">
-                Використовуйте, якщо виникають помилки завантаження
+                Якщо виникають помилки — очистіть кеш браузера (<code className="bg-slate-700 px-1 rounded">Ctrl+Shift+Delete</code>)
               </p>
             </div>
           </div>
