@@ -92,40 +92,76 @@ function App() {
     setDownloadProgress('Підготовка...');
 
     try {
-      setDownloadProgress('Перевірка кешу...');
-      const storedModels = await ttsModule.stored();
-      console.log('Stored models:', storedModels);
-
-      if (!storedModels.includes(selectedVoice)) {
-        setDownloadProgress('Завантаження голосової моделі...');
-        console.log('Downloading model:', selectedVoice);
-        
-        await ttsModule.download(selectedVoice, (progress: any) => {
-          if (progress.loaded && progress.total) {
-            const percent = Math.round((progress.loaded * 100) / progress.total);
-            setDownloadProgress(`Завантаження: ${percent}%`);
-          }
-        });
-        
-        console.log('Model downloaded successfully');
-      } else {
-        console.log('Model already cached:', selectedVoice);
-        setDownloadProgress('Модель знайдена в кеші');
+      // Крок 1: Видаляємо стару модель з OPFS (вирішує проблему permissions)
+      setDownloadProgress('Очищення старого кешу...');
+      try {
+        await ttsModule.remove(selectedVoice);
+        console.log('Old model removed');
+      } catch (e) {
+        console.log('No old model to remove');
       }
 
-      setDownloadProgress('Генерація мовлення...');
-      console.log('Generating audio for text:', text.substring(0, 50));
+      // Крок 2: Завантажуємо модель заново
+      setDownloadProgress('Завантаження голосової моделі...');
+      console.log('Downloading model:', selectedVoice);
 
-      const wav = await ttsModule.predict({
-        text: text,
-        voiceId: selectedVoice,
-      }, (progress: any) => {
+      await ttsModule.download(selectedVoice, (progress: any) => {
         if (progress.loaded && progress.total) {
           const percent = Math.round((progress.loaded * 100) / progress.total);
-          setDownloadProgress(`Генерація: ${percent}%`);
+          setDownloadProgress(`Завантаження: ${percent}%`);
         }
       });
 
+      console.log('Model downloaded successfully');
+
+      // Крок 3: Затримка перед генерацією (даємо час OPFS стабілізуватися)
+      setDownloadProgress('Підготовка до генерації...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Крок 4: Генерація аудіо з retry
+      setDownloadProgress('Генерація мовлення...');
+      console.log('Generating audio for text:', text.substring(0, 50));
+
+      let wav: Blob | undefined;
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts) {
+        try {
+          wav = await ttsModule.predict({
+            text: text,
+            voiceId: selectedVoice,
+          }, (progress: any) => {
+            if (progress.loaded && progress.total) {
+              const percent = Math.round((progress.loaded * 100) / progress.total);
+              setDownloadProgress(`Генерація: ${percent}%`);
+            }
+          });
+          break; // Успіх - виходимо з циклу
+        } catch (predictErr) {
+          attempts++;
+          console.warn(`Attempt ${attempts} failed:`, predictErr);
+
+          if (attempts >= maxAttempts) {
+            throw predictErr;
+          }
+
+          // Перед повторною спробою - видаляємо і перезавантажуємо модель
+          setDownloadProgress(`Спроба ${attempts + 1}/${maxAttempts}... Перезавантаження моделі...`);
+          await ttsModule.remove(selectedVoice).catch(() => {});
+          await ttsModule.download(selectedVoice, (progress: any) => {
+            if (progress.loaded && progress.total) {
+              const percent = Math.round((progress.loaded * 100) / progress.total);
+              setDownloadProgress(`Завантаження: ${percent}%`);
+            }
+          });
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!wav) {
+        throw new Error('Не вдалося згенерувати аудіо після всіх спроб');
+      }
       console.log('Audio generated successfully');
       const url = URL.createObjectURL(wav);
       setAudioUrl(url);
@@ -138,15 +174,17 @@ function App() {
     } catch (err) {
       console.error('TTS Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Невідома помилка';
-      
+
       if (errorMessage.includes('Entry not found')) {
         setError('Голосова модель не знайдена. Спробуйте інший голос або очистіть кеш браузера.');
       } else if (errorMessage.includes('Failed to fetch')) {
         setError('Не вдалося завантажити модель. Перевірте підключення до інтернету.');
+      } else if (errorMessage.includes('could not be read') || errorMessage.includes('permission')) {
+        setError('Проблема з доступом до файлу. Натисніть "Очистити кеш моделей" і спробуйте знову.');
       } else {
         setError(`Помилка генерації: ${errorMessage}`);
       }
-      
+
       setDownloadProgress(null);
     } finally {
       setIsGenerating(false);
@@ -155,7 +193,7 @@ function App() {
 
   const handlePlay = () => {
     if (!audioRef.current || !audioUrl) return;
-    
+
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -291,8 +329,8 @@ function App() {
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{voice.name}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        voice.gender === 'female' 
-                          ? 'bg-pink-500/20 text-pink-400' 
+                        voice.gender === 'female'
+                          ? 'bg-pink-500/20 text-pink-400'
                           : 'bg-blue-500/20 text-blue-400'
                       }`}>
                         {voice.gender === 'female' ? '♀' : '♂'}
@@ -310,7 +348,7 @@ function App() {
                 <li>• Piper TTS працює повністю в браузері</li>
                 <li>• Моделі завантажуються один раз і кешуються</li>
                 <li>• Ваш текст ніколи не відправляється на сервер</li>
-                <li>• Підтримує 11 мов та 20+ голосів</li>
+                <li>• Підтримує 13+ мов та 20+ голосів</li>
                 <li>• Генерація через WebAssembly + ONNX</li>
               </ul>
             </div>
@@ -362,7 +400,7 @@ function App() {
                 rows={6}
                 className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all resize-none"
               />
-              
+
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="text-xs text-slate-400">Приклади:</span>
                 <button
@@ -454,8 +492,8 @@ function App() {
                       <div
                         key={i}
                         className={`w-1 rounded-full transition-all ${
-                          isPlaying 
-                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse' 
+                          isPlaying
+                            ? 'bg-gradient-to-t from-purple-500 to-pink-500 animate-pulse'
                             : 'bg-slate-600'
                         }`}
                         style={{
@@ -553,7 +591,7 @@ function App() {
                   </svg>
                 </div>
                 <h3 className="text-white font-medium text-sm">Багатомовність</h3>
-                <p className="text-xs text-slate-400 mt-1">11 мов та 20+ голосів</p>
+                <p className="text-xs text-slate-400 mt-1">13+ мов та 20+ голосів</p>
               </div>
             </div>
           </div>
